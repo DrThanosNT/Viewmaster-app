@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "viewmaster-app",
-    "slug": "viewmaster-app",
+    "slug": "thanos",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,10 +16,17 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.viewmasterevents.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "46bd1773-fc65-48eb-af15-b5e1030a0978"
+      }
+    },
+    "owner": "drthanoss-team"
   }
 }
