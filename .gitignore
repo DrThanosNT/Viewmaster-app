@@ -39,3 +39,12 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Credentials
+credentials.json
+*.keystore
