@@ -1,14 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api } from '../api/client';
+import { api, setUnauthorizedHandler } from '../api/client';
 
-type User = { id: string; name: string; role: string };
+type User = { id: string; name: string; role: string; photoUrl?: string | null };
 
 type AuthContextType = {
   user: User | null;
   loading: boolean;
   login: (phone: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (partial: Partial<User>) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18,10 +19,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem('user').then((raw) => {
-      if (raw) setUser(JSON.parse(raw));
-      setLoading(false);
-    });
+    AsyncStorage.getItem('user')
+      .then((raw) => { if (raw) setUser(JSON.parse(raw)); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+    setUnauthorizedHandler(() => setUser(null));
   }, []);
 
   async function login(phone: string, password: string) {
@@ -32,15 +34,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function logout() {
-    await AsyncStorage.multiRemove(['token', 'user']);
-    setUser(null);
+    try {
+      await AsyncStorage.multiRemove(['token', 'user']);
+    } finally {
+      setUser(null);
+    }
   }
 
-  return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  async function updateUser(partial: Partial<User>) {
+    setUser((prev) => {
+      const next = prev ? { ...prev, ...partial } : prev;
+      if (next) AsyncStorage.setItem('user', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }
+
+  return <AuthContext.Provider value={{ user, loading, login, logout, updateUser }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
