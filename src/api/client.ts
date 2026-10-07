@@ -41,6 +41,7 @@ export const api = {
   searchItems: (search: string) => request(`/items?search=${encodeURIComponent(search)}`),
   createItem: (name: string, kind: 'DISCRETE' | 'CONSUMABLE' = 'DISCRETE') =>
     request('/items', { method: 'POST', body: JSON.stringify({ name, kind }) }),
+  deleteItem: (id: string) => request(`/items/${id}`, { method: 'DELETE' }),
 
   moveStock: (payload: { itemId: string; fromLocationId?: string; toLocationId: string; quantity: number; note?: string }) =>
     request('/movements', { method: 'POST', body: JSON.stringify(payload) }),

@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import Screen from '../components/Screen';
+import ManageItemsScreen from './ManageItemsScreen';
 import { parseDateTime, todayInput } from '../utils/dateTime';
 
 type LocationType = 'STORAGE' | 'VEHICLE' | 'OTHER';
@@ -18,16 +19,17 @@ const TYPE_OPTIONS: { value: LocationType; label: string }[] = [
 const ROLE_LABELS: Record<string, string> = { ADMIN: 'Διαχειριστής', MANAGER: 'Υπεύθυνος', WORKER: 'Εργαζόμενος' };
 const ROLE_ORDER: Record<string, number> = { ADMIN: 0, MANAGER: 1, WORKER: 2 };
 
-type View = 'menu' | 'createLocation' | 'manageLocations' | 'createEvent' | 'manageEvents' | 'registerUser' | 'members' | 'memberDetail';
+type AdminView = 'menu' | 'createLocation' | 'manageLocations' | 'manageItems' | 'createEvent' | 'manageEvents' | 'registerUser' | 'members' | 'memberDetail';
 
 export default function AdminScreen() {
-  const [view, setView] = useState<View>('menu');
+  const [view, setView] = useState<AdminView>('menu');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-  const { spacing, typography } = useTheme();
-  const styles = makeStyles(useTheme().colors, spacing);
+  const { colors, spacing, typography } = useTheme();
+  const styles = makeStyles(colors, spacing);
 
   if (view === 'createLocation') return <CreateLocationScreen onBack={() => setView('menu')} />;
   if (view === 'manageLocations') return <ManageLocationsScreen onBack={() => setView('menu')} />;
+  if (view === 'manageItems') return <ManageItemsScreen onBack={() => setView('menu')} />;
   if (view === 'createEvent') return <CreateEventScreen onBack={() => setView('menu')} />;
   if (view === 'manageEvents') return <ManageEventsScreen onBack={() => setView('menu')} />;
   if (view === 'registerUser') return <RegisterUserScreen onBack={() => setView('menu')} />;
@@ -37,6 +39,7 @@ export default function AdminScreen() {
   const rows: { label: string; onPress: () => void }[] = [
     { label: 'Νέα Τοποθεσία', onPress: () => setView('createLocation') },
     { label: 'Τοποθεσίες', onPress: () => setView('manageLocations') },
+    { label: 'Αντικείμενα', onPress: () => setView('manageItems') },
     { label: 'Νέα Εκδήλωση', onPress: () => setView('createEvent') },
     { label: 'Εκδηλώσεις', onPress: () => setView('manageEvents') },
     { label: 'Νέος Χρήστης', onPress: () => setView('registerUser') },
@@ -236,7 +239,7 @@ function formatEventRange(startIso: string, endIso: string) {
 }
 
 function ManageEventsScreen({ onBack }: { onBack: () => void }) {
-  const { colors, spacing, radius, typography } = useTheme();
+  const { colors, spacing, typography } = useTheme();
   const styles = makeStyles(colors, spacing);
   const [events, setEvents] = useState<EventT[]>([]);
   const [openEvent, setOpenEvent] = useState<EventT | null>(null);
@@ -277,7 +280,7 @@ function ManageEventsScreen({ onBack }: { onBack: () => void }) {
 }
 
 function EventDetailScreen({ event, onBack, onDeleted }: { event: EventT; onBack: () => void; onDeleted: () => void }) {
-  const { colors, spacing, radius, typography } = useTheme();
+  const { colors, spacing, typography } = useTheme();
   const styles = makeStyles(colors, spacing);
   const [expandedLocationId, setExpandedLocationId] = useState<string | null>(null);
   const [locationItems, setLocationItems] = useState<Record<string, { name: string; quantity: number }[]>>({});

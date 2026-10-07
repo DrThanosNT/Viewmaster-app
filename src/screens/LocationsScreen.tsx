@@ -1,10 +1,11 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 import Screen from '../components/Screen';
 import PressableCard from '../components/PressableCard';
+import FitInput from '../components/FitInput';
 
 type EventLite = { id: string; name: string };
 type StockEntry = { quantity: number; damagedQuantity?: number; temporaryQuantity?: number };
@@ -96,7 +97,7 @@ export default function LocationsScreen({ onBack, initialList }: { onBack?: () =
         </TouchableOpacity>
         <Text style={[typography.title, { marginBottom: spacing.lg }]}>{title}</Text>
 
-        <TextInput style={styles.input} placeholder="Αναζήτηση αντικειμένου ή τοποθεσίας..." placeholderTextColor={colors.muted} value={crossQuery} onChangeText={setCrossQuery} autoCapitalize="none" />
+        <FitInput placeholder="Αναζήτηση αντικειμένου ή τοποθεσίας..." value={crossQuery} onChangeText={setCrossQuery} autoCapitalize="none" />
 
         <ScrollView style={{ marginTop: spacing.md }} keyboardShouldPersistTaps="handled">
           {!loaded ? (
@@ -140,7 +141,7 @@ export default function LocationsScreen({ onBack, initialList }: { onBack?: () =
         <Text style={typography.title} numberOfLines={1}>{selected.name}</Text>
         <Text style={[typography.bodyMuted, { marginBottom: spacing.lg }]}>{TYPE_LABELS[selected.type] || selected.type}</Text>
 
-        <TextInput style={styles.input} placeholder="Αναζήτηση αντικειμένου..." placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} autoCapitalize="none" />
+        <FitInput placeholder="Αναζήτηση αντικειμένου..." value={query} onChangeText={setQuery} autoCapitalize="none" />
 
         <ScrollView style={{ marginTop: spacing.md }} keyboardShouldPersistTaps="handled">
           {loading ? (
@@ -235,7 +236,6 @@ function makeStyles(colors: any, spacing: any, radius: any) {
   return StyleSheet.create({
     backRow: { marginBottom: spacing.md },
     backText: { fontSize: 14, color: colors.petrol, fontWeight: '600' },
-    input: { borderWidth: 1, borderColor: colors.lineStrong, borderRadius: radius.md, paddingVertical: 13, paddingHorizontal: spacing.lg, fontSize: 15, color: colors.ink, backgroundColor: colors.card },
     emptyText: { textAlign: 'center', color: colors.muted, marginTop: spacing.xxl },
     sectionLabel: { fontSize: 13, fontWeight: '600', color: colors.ink2, marginTop: spacing.lg, marginBottom: spacing.sm },
 

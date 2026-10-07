@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 import Screen from '../components/Screen';
+import FitInput from '../components/FitInput';
 
 type EventLite = { id: string; name: string };
 type LocationT = { id: string; name: string; type: string; isSystem?: boolean; eventLocations?: { event: EventLite }[] };
@@ -31,7 +32,7 @@ const MODE_LABELS: Record<Mode, string> = {
 };
 
 export default function MoveStockScreen() {
-  const { colors, spacing, radius, typography } = useTheme();
+  const { colors, spacing, radius } = useTheme();
   const styles = makeStyles(colors, spacing, radius);
 
   const [mode, setMode] = useState<Mode>('transport');
@@ -267,7 +268,7 @@ export default function MoveStockScreen() {
               <SelectedField styles={styles} label={pendingItem.name} onChange={resetPending} />
             ) : (
               <>
-                <TextInput style={styles.input} placeholder="Αναζήτηση ή νέο αντικείμενο..." placeholderTextColor={colors.muted} value={itemQuery} onChangeText={setItemQuery} onFocus={() => setItemFocused(true)} onBlur={() => setTimeout(() => setItemFocused(false), 150)} autoCapitalize="none" />
+                <FitInput placeholder="Αναζήτηση ή νέο αντικείμενο..." value={itemQuery} onChangeText={setItemQuery} onFocus={() => setItemFocused(true)} onBlur={() => setTimeout(() => setItemFocused(false), 150)} autoCapitalize="none" />
                 {itemFocused && (
                   <View style={styles.dropdown}>
                     <ScrollView style={{ maxHeight: 220 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
@@ -294,9 +295,16 @@ export default function MoveStockScreen() {
             <SelectedField styles={styles} label={`${pendingRow.itemName} — ${pendingRow.locationName}${pendingRow.eventName ? ` (${pendingRow.eventName})` : ''}${pendingRow.fromDamaged ? ' · κατεστραμμένο' : ''}`} onChange={resetPending} />
           ) : (
             <>
-              <TextInput style={styles.input} placeholder={mode === 'return' ? 'Αναζήτηση δανεικού αντικειμένου...' : mode === 'repair' ? 'Αναζήτηση κατεστραμμένου αντικειμένου...' : 'Αναζήτηση αντικειμένου...'} placeholderTextColor={colors.muted} value={itemQuery} onChangeText={setItemQuery} onFocus={() => setItemFocused(true)} onBlur={() => setTimeout(() => setItemFocused(false), 150)} autoCapitalize="none" />
+              <FitInput
+                placeholder={mode === 'return' ? 'Αναζήτηση δανεικού αντικειμένου...' : mode === 'repair' ? 'Αναζήτηση κατεστραμμένου αντικειμένου...' : 'Αναζήτηση αντικειμένου...'}
+                value={itemQuery}
+                onChangeText={setItemQuery}
+                onFocus={() => setItemFocused(true)}
+                onBlur={() => setTimeout(() => setItemFocused(false), 150)}
+                autoCapitalize="none"
+              />
               {itemFocused && (
-                <Dropdown styles={styles} colors={colors} emptyText={mode === 'return' ? 'Κανένα δανεικό αντικείμενο εκεί.' : mode === 'repair' ? 'Κανένα κατεστραμμένο αντικείμενο.' : 'Δεν βρέθηκε αντικείμενο.'} items={itemResults as (StockRow & { remaining: number })[]} keyExtractor={(r) => r.key} onSelect={(r) => { setPendingRow(r); setItemFocused(false); }} render={(r) => (
+                <Dropdown styles={styles} emptyText={mode === 'return' ? 'Κανένα δανεικό αντικείμενο εκεί.' : mode === 'repair' ? 'Κανένα κατεστραμμένο αντικείμενο.' : 'Δεν βρέθηκε αντικείμενο.'} items={itemResults as (StockRow & { remaining: number })[]} keyExtractor={(r) => r.key} onSelect={(r) => { setPendingRow(r); setItemFocused(false); }} render={(r) => (
                   <Text style={styles.optionText} numberOfLines={1}>
                     {r.itemName} <Text style={styles.optionSub}>— {r.locationName}{r.eventName ? ` (${r.eventName})` : ''} ({r.remaining}){r.fromDamaged ? ' · κατεστρ.' : ''}</Text>
                   </Text>
@@ -312,9 +320,9 @@ export default function MoveStockScreen() {
                 <SelectedField styles={styles} label={pendingDestination.name} onChange={() => { setPendingDestination(null); setToQuery(''); setPendingToEvent(null); }} />
               ) : (
                 <>
-                  <TextInput style={styles.input} placeholder="Αναζήτηση τοποθεσίας..." placeholderTextColor={colors.muted} value={toQuery} onChangeText={setToQuery} onFocus={() => setToFocused(true)} onBlur={() => setTimeout(() => setToFocused(false), 150)} autoCapitalize="none" />
+                  <FitInput placeholder="Αναζήτηση τοποθεσίας..." value={toQuery} onChangeText={setToQuery} onFocus={() => setToFocused(true)} onBlur={() => setTimeout(() => setToFocused(false), 150)} autoCapitalize="none" />
                   {toFocused && (
-                    <Dropdown styles={styles} colors={colors} emptyText="Δεν βρέθηκε τοποθεσία." items={toResults} keyExtractor={(l) => l.id} onSelect={(l) => { setPendingDestination(l); setToQuery(''); setToFocused(false); }} render={(l) => <Text style={styles.optionText} numberOfLines={1}>{l.name}</Text>} />
+                    <Dropdown styles={styles} emptyText="Δεν βρέθηκε τοποθεσία." items={toResults} keyExtractor={(l) => l.id} onSelect={(l) => { setPendingDestination(l); setToQuery(''); setToFocused(false); }} render={(l) => <Text style={styles.optionText} numberOfLines={1}>{l.name}</Text>} />
                   )}
                 </>
               )}
@@ -344,7 +352,7 @@ export default function MoveStockScreen() {
           {readyToAdd && (
             <>
               <Text style={styles.label}>{needsDestination ? '3.' : '2.'} Ποσότητα</Text>
-              <TextInput style={styles.input} keyboardType="numeric" value={pendingQuantity} onChangeText={handlePendingQuantityChange} placeholder={maxForPending !== undefined ? `έως ${maxForPending}` : 'Ποσότητα'} placeholderTextColor={colors.muted} />
+              <FitInput keyboardType="numeric" value={pendingQuantity} onChangeText={handlePendingQuantityChange} placeholder={maxForPending !== undefined ? `έως ${maxForPending}` : 'Ποσότητα'} />
               <TouchableOpacity style={styles.addButton} onPress={addToCart}><Text style={styles.addButtonText}>+ Προσθήκη στη λίστα</Text></TouchableOpacity>
             </>
           )}
@@ -394,16 +402,18 @@ export default function MoveStockScreen() {
   );
 }
 
+// The chosen item stays on ONE line and shrinks (down to 75%) to fit before
+// it truncates, so long names never wrap or push "Αλλαγή" out of the box.
 function SelectedField({ label, onChange, styles }: { label: string; onChange: () => void; styles: any }) {
   return (
     <View style={styles.selectedRow}>
-      <Text style={styles.selectedChipText} numberOfLines={1}>{label}</Text>
+      <Text style={styles.selectedChipText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{label}</Text>
       <TouchableOpacity onPress={onChange}><Text style={styles.changeLink}>Αλλαγή</Text></TouchableOpacity>
     </View>
   );
 }
 
-function Dropdown<T>({ items, keyExtractor, onSelect, render, emptyText, styles }: { items: T[]; keyExtractor: (item: T) => string; onSelect: (item: T) => void; render: (item: T) => React.ReactNode; emptyText: string; styles: any; colors: any }) {
+function Dropdown<T>({ items, keyExtractor, onSelect, render, emptyText, styles }: { items: T[]; keyExtractor: (item: T) => string; onSelect: (item: T) => void; render: (item: T) => React.ReactNode; emptyText: string; styles: any }) {
   return (
     <View style={styles.dropdown}>
       <ScrollView style={{ maxHeight: 220 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
@@ -439,7 +449,7 @@ function makeStyles(colors: any, spacing: any, radius: any) {
     optionSub: { fontSize: 13, color: colors.muted, fontWeight: '400' },
     createOption: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
     createOptionText: { fontSize: 14, color: colors.petrol, fontWeight: '700' },
-    selectedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.lineStrong, borderRadius: radius.md, paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
+    selectedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.lineStrong, borderRadius: radius.md, minHeight: 50, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg },
     selectedChipText: { fontSize: 15, fontWeight: '600', color: colors.ink, flex: 1, minWidth: 0, marginRight: spacing.sm },
     changeLink: { fontSize: 13, color: colors.petrol, fontWeight: '600', flexShrink: 0 },
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
