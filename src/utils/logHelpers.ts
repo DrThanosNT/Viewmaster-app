@@ -1,3 +1,5 @@
+import { ion } from '../components/AppIcon';
+
 export type Mover = { id: string; name: string; role?: string; photoUrl?: string | null };
 
 export type DestinationGroup = {
@@ -33,15 +35,17 @@ export function formatFullDate(iso: string) {
   return `${date} · ${formatTime(iso)}`;
 }
 
-// Visual identity for one destination block: the symbol/colors for its
+// Visual identity for one destination block: the icon/colors for its
 // badge, a short label for list cards, and the "kind" caption (Προς /
-// Ζημιά / Επισκευή) used on the detail page.
+// Ζημιά / Επισκευή) used on the detail page. The icons are real vector
+// icons (not text characters), so they stay crisp and as large as the
+// badge needs.
 export function badgeFor(dest: DestinationGroup, colors: any) {
   if (dest.isDamage) {
-    return { symbol: '!', color: colors.rust, soft: colors.rustSoft, kindLabel: 'Ζημιά', listLabel: `Ζημιά — ${dest.location.name}` };
+    return { icon: ion('warning'), color: colors.rust, soft: colors.rustSoft, kindLabel: 'Ζημιά', listLabel: `Ζημιά — ${dest.location.name}` };
   }
   if (dest.isRepair) {
-    return { symbol: '✓', color: colors.moss, soft: colors.mossSoft, kindLabel: 'Επισκευή', listLabel: `Επισκευή — ${dest.location.name}` };
+    return { icon: ion('checkmark'), color: colors.moss, soft: colors.mossSoft, kindLabel: 'Επισκευή', listLabel: `Επισκευή — ${dest.location.name}` };
   }
-  return { symbol: '→', color: colors.petrol, soft: colors.petrolSoft, kindLabel: 'Προς', listLabel: dest.location.name };
+  return { icon: ion('arrow-forward'), color: colors.petrol, soft: colors.petrolSoft, kindLabel: 'Προς', listLabel: dest.location.name };
 }

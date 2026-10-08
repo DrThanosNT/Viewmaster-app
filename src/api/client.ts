@@ -47,7 +47,7 @@ export const api = {
     request('/movements', { method: 'POST', body: JSON.stringify(payload) }),
 
   moveStockBatch: (payload: {
-    lines: { itemId: string; locationId?: string; fromEventId?: string | null; toLocationId: string; toEventId?: string | null; quantity: number; temporary?: boolean }[];
+    lines: { itemId: string; locationId?: string; fromEventId?: string | null; toLocationId: string; toEventId?: string | null; quantity: number; temporary?: boolean; expectedReturnAt?: string | null }[];
     note?: string;
   }) => request('/movements/batch', { method: 'POST', body: JSON.stringify(payload) }),
 
@@ -85,4 +85,5 @@ export const api = {
   deleteUser: (id: string) => request(`/auth/users/${id}`, { method: 'DELETE' }),
   updateUserRole: (id: string, role: string) => request(`/auth/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
   updateMyPhoto: (photoUrl: string | null) => request('/auth/me/photo', { method: 'PATCH', body: JSON.stringify({ photoUrl }) }),
+  getMe: () => request('/auth/me'),
 };

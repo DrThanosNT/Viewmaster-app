@@ -6,11 +6,14 @@ import { useTheme } from '../context/ThemeContext';
 import LocationsScreen from './LocationsScreen';
 import Screen from '../components/Screen';
 import PressableCard from '../components/PressableCard';
+import AppIcon, { ion } from '../components/AppIcon';
 import { LogEntry, badgeFor } from '../utils/logHelpers';
+import { dueInfo, formatDue, compareDue } from '../utils/dateTime';
+import useTick from '../utils/useTick';
 
 const TEMP_PREVIEW = 3;
 
-type TemporaryRow = { id: string; temporaryQuantity: number; item: { name: string }; location: { name: string }; event?: { name: string } | null; updatedAt: string };
+type TemporaryRow = { id: string; temporaryQuantity: number; expectedReturnAt?: string | null; item: { name: string }; location: { name: string }; event?: { name: string } | null; updatedAt: string };
 
 function daysAgo(iso: string) {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
@@ -32,6 +35,8 @@ export default function OverviewScreen() {
   const { colors, spacing, radius, typography } = useTheme();
   const styles = makeStyles(colors, spacing, radius);
   const navigation = useNavigation<any>();
+  // Re-renders while the screen is open so an item turns red the moment it is late.
+  useTick();
 
   const [view, setView] = useState<'dashboard' | 'allItems'>('dashboard');
   const [allItemsStart, setAllItemsStart] = useState<'damaged' | 'temporary' | undefined>(undefined);
@@ -59,26 +64,52 @@ export default function OverviewScreen() {
     return <LocationsScreen initialList={allItemsStart} onBack={() => { setView('dashboard'); setAllItemsStart(undefined); }} />;
   }
 
+  // Late ones first (their deadlines are the earliest), undated ones last.
+  const sortedTemporary = [...temporary].sort((a, b) => compareDue(a.expectedReturnAt, b.expectedReturnAt));
+  const lateCount = temporary.filter((r) => r.expectedReturnAt && dueInfo(r.expectedReturnAt).overdue).length;
+  const accent = lateCount > 0 ? colors.rust : colors.amber;
+
   const temporaryInner = (
     <>
       <View style={styles.cardHeader}>
-        <View style={[styles.dot, { backgroundColor: colors.amber }]} />
+        <View style={[styles.dot, { backgroundColor: accent }]} />
         <Text style={[typography.sectionTitle, { flex: 1 }]}>Προσωρινά σε εκκρεμότητα</Text>
         {temporary.length > 0 && <Text style={styles.chevronSmall}>›</Text>}
       </View>
+      {lateCount > 0 && (
+        <View style={styles.lateBanner}>
+          <AppIcon icon={ion('alert-circle')} size={17} color={colors.rust} />
+          <Text style={styles.lateBannerText}>
+            {lateCount === 1 ? '1 είδος ξεπέρασε την προθεσμία επιστροφής' : `${lateCount} είδη ξεπέρασαν την προθεσμία επιστροφής`}
+          </Text>
+        </View>
+      )}
       {temporary.length === 0 ? (
         <Text style={styles.emptyText}>Τίποτα προσωρινό αυτή τη στιγμή.</Text>
       ) : (
         <>
-          {temporary.slice(0, TEMP_PREVIEW).map((r) => (
-            <View key={r.id} style={styles.row}>
-              <View style={styles.rowTextCol}>
-                <Text style={typography.body} numberOfLines={1}>{r.item.name}</Text>
-                <Text style={typography.caption} numberOfLines={1}>{r.location.name}{r.event ? ` (${r.event.name})` : ''} · {daysAgo(r.updatedAt)}</Text>
+          {sortedTemporary.slice(0, TEMP_PREVIEW).map((r) => {
+            const due = r.expectedReturnAt ? dueInfo(r.expectedReturnAt) : null;
+            const late = !!due && due.overdue;
+            return (
+              <View key={r.id} style={[styles.row, late && styles.rowLate]}>
+                <View style={styles.rowTextCol}>
+                  <Text style={[typography.body, late && { color: colors.rust, fontWeight: '700' }]} numberOfLines={1}>{r.item.name}</Text>
+                  <Text style={typography.caption} numberOfLines={1}>
+                    {r.location.name}{r.event ? ` (${r.event.name})` : ''}
+                    {!due ? ` · ${daysAgo(r.updatedAt)}` : !late ? ` · έως ${formatDue(r.expectedReturnAt!)}` : ''}
+                  </Text>
+                  {late && due ? (
+                    <View style={styles.lateLine}>
+                      <AppIcon icon={ion('alert-circle')} size={13} color={colors.rust} />
+                      <Text style={styles.lateText} numberOfLines={1}>{due.phrase}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={[styles.warningNumber, late && { color: colors.rust }]}>{r.temporaryQuantity}</Text>
               </View>
-              <Text style={styles.warningNumber}>{r.temporaryQuantity}</Text>
-            </View>
-          ))}
+            );
+          })}
           {temporary.length > TEMP_PREVIEW && <Text style={styles.moreText}>+{temporary.length - TEMP_PREVIEW} ακόμα</Text>}
         </>
       )}
@@ -92,7 +123,7 @@ export default function OverviewScreen() {
 
         {temporary.length > 0 ? (
           <PressableCard
-            style={[styles.card, { borderLeftWidth: 3, borderLeftColor: colors.amber }]}
+            style={[styles.card, { borderLeftWidth: 3, borderLeftColor: accent }]}
             onPress={() => { setAllItemsStart('temporary'); setView('allItems'); }}
           >
             {temporaryInner}
@@ -116,7 +147,7 @@ export default function OverviewScreen() {
                 <PressableCard key={log.id} style={styles.activityRow} onPress={() => navigation.navigate('Καταγραφές', { openLog: log })}>
                   {badge && (
                     <View style={[styles.miniBadge, { backgroundColor: badge.soft, borderColor: badge.color }]}>
-                      <Text style={[styles.miniBadgeSymbol, { color: badge.color }]}>{badge.symbol}</Text>
+                      <AppIcon icon={badge.icon} size={17} color={badge.color} />
                     </View>
                   )}
                   <View style={styles.rowTextCol}>
@@ -150,8 +181,12 @@ function makeStyles(colors: any, spacing: any, radius: any) {
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.paper },
     rowTextCol: { flex: 1, minWidth: 0, marginRight: spacing.sm },
     activityRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.sm, borderRadius: radius.sm, marginTop: 2 },
-    miniBadge: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm, flexShrink: 0 },
-    miniBadgeSymbol: { fontSize: 12, fontWeight: '800' },
+    miniBadge: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm, flexShrink: 0 },
+    rowLate: { backgroundColor: colors.rustSoft, borderRadius: radius.sm, paddingHorizontal: spacing.sm, marginTop: 2 },
+    lateLine: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+    lateText: { fontSize: 12, fontWeight: '700', color: colors.rust, marginLeft: 4, flexShrink: 1 },
+    lateBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.rustSoft, borderRadius: radius.sm, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, marginBottom: spacing.sm },
+    lateBannerText: { fontSize: 13, fontWeight: '700', color: colors.rust, marginLeft: spacing.sm, flex: 1, minWidth: 0 },
     moreText: { fontSize: 12, color: colors.muted, fontWeight: '600', marginTop: spacing.xs },
     emptyText: { fontSize: 13, color: colors.muted, fontStyle: 'italic' },
     warningNumber: { fontFamily: 'monospace', fontSize: 15, color: colors.amber, fontWeight: '700', flexShrink: 0 },

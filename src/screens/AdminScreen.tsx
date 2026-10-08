@@ -1,10 +1,13 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import Screen from '../components/Screen';
+import AppIcon, { IconSpec, ion, mci } from '../components/AppIcon';
+import LocationIcon from '../components/LocationIcon';
+import CountdownConfirmModal from '../components/CountdownConfirmModal';
 import ManageItemsScreen from './ManageItemsScreen';
 import { parseDateTime, todayInput } from '../utils/dateTime';
 
@@ -36,14 +39,16 @@ export default function AdminScreen() {
   if (view === 'members') return <MembersScreen onBack={() => setView('menu')} onSelect={(m) => { setSelectedMember(m); setView('memberDetail'); }} />;
   if (view === 'memberDetail' && selectedMember) return <MemberDetailScreen member={selectedMember} onBack={() => setView('members')} />;
 
-  const rows: { label: string; onPress: () => void }[] = [
-    { label: 'Νέα Τοποθεσία', onPress: () => setView('createLocation') },
-    { label: 'Τοποθεσίες', onPress: () => setView('manageLocations') },
-    { label: 'Αντικείμενα', onPress: () => setView('manageItems') },
-    { label: 'Νέα Εκδήλωση', onPress: () => setView('createEvent') },
-    { label: 'Εκδηλώσεις', onPress: () => setView('manageEvents') },
-    { label: 'Νέος Χρήστης', onPress: () => setView('registerUser') },
-    { label: 'Μέλη', onPress: () => setView('members') },
+  // Each button gets an icon tile. Colors group them: places (teal), items
+  // (amber), events (plum), people (green).
+  const rows: { label: string; icon: IconSpec; color: string; soft: string; onPress: () => void }[] = [
+    { label: 'Νέα Τοποθεσία', icon: mci('map-marker-plus'), color: colors.petrol, soft: colors.petrolSoft, onPress: () => setView('createLocation') },
+    { label: 'Τοποθεσίες', icon: ion('location-outline'), color: colors.petrol, soft: colors.petrolSoft, onPress: () => setView('manageLocations') },
+    { label: 'Αντικείμενα', icon: ion('cube-outline'), color: colors.amber, soft: colors.amberSoft, onPress: () => setView('manageItems') },
+    { label: 'Νέα Εκδήλωση', icon: mci('calendar-plus'), color: colors.plum, soft: colors.plumSoft, onPress: () => setView('createEvent') },
+    { label: 'Εκδηλώσεις', icon: mci('calendar-star'), color: colors.plum, soft: colors.plumSoft, onPress: () => setView('manageEvents') },
+    { label: 'Νέος Χρήστης', icon: ion('person-add-outline'), color: colors.moss, soft: colors.mossSoft, onPress: () => setView('registerUser') },
+    { label: 'Μέλη', icon: ion('people-outline'), color: colors.moss, soft: colors.mossSoft, onPress: () => setView('members') },
   ];
 
   return (
@@ -51,7 +56,10 @@ export default function AdminScreen() {
       <Text style={[typography.title, { marginBottom: spacing.lg }]}>Διαχείριση</Text>
       {rows.map((r) => (
         <TouchableOpacity key={r.label} style={styles.menuRow} onPress={r.onPress}>
-          <Text style={styles.menuText}>{r.label}</Text>
+          <View style={[styles.menuIcon, { backgroundColor: r.soft }]}>
+            <AppIcon icon={r.icon} size={22} color={r.color} />
+          </View>
+          <Text style={styles.menuText} numberOfLines={1}>{r.label}</Text>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
       ))}
@@ -136,7 +144,8 @@ function ManageLocationsScreen({ onBack }: { onBack: () => void }) {
       <ScrollView>
         {locations.filter((l) => !l.isSystem).map((loc) => (
           <View key={loc.id} style={styles.listRow}>
-            <Text style={styles.listRowText} numberOfLines={1}>{loc.name}</Text>
+            <LocationIcon type={loc.type} size={36} />
+            <Text style={[styles.listRowText, { flex: 1, minWidth: 0, marginHorizontal: spacing.md }]} numberOfLines={1}>{loc.name}</Text>
             <TouchableOpacity onPress={() => confirmDelete(loc)}><Text style={styles.deleteText}>Διαγραφή</Text></TouchableOpacity>
           </View>
         ))}
@@ -455,16 +464,41 @@ function MemberDetailScreen({ member, onBack }: { member: Member; onBack: () => 
   const styles = makeStyles(colors, spacing);
   const { user: currentUser } = useAuth();
   const [role, setRole] = useState(member.role);
+  const [pendingRole, setPendingRole] = useState<string | null>(null);
+  const [savingRole, setSavingRole] = useState(false);
   const isSelf = currentUser?.id === member.id;
 
-  async function changeRole(newRole: string) {
+  // Keeps the popup text steady while it fades out after closing.
+  const shownTarget = useRef(member.role);
+  if (pendingRole) shownTarget.current = pendingRole;
+
+  // A role change never happens on a single tap: it opens a popup whose
+  // confirm button unlocks only after a 5 second countdown.
+  function askChangeRole(newRole: string) {
+    if (isSelf || newRole === role) return;
+    setPendingRole(newRole);
+  }
+
+  async function confirmChangeRole() {
+    if (!pendingRole || savingRole) return;
+    setSavingRole(true);
     try {
-      await api.updateUserRole(member.id, newRole);
-      setRole(newRole);
+      await api.updateUserRole(member.id, pendingRole);
+      setRole(pendingRole);
+      setPendingRole(null);
     } catch (err: any) {
-      Alert.alert('Αποτυχία', err.message);
+      setPendingRole(null);
+      // Let the popup finish closing first, or iOS drops the alert.
+      setTimeout(() => Alert.alert('Αποτυχία', err.message), 350);
+    } finally {
+      setSavingRole(false);
     }
   }
+
+  const target = shownTarget.current;
+  const roleMessage =
+    `Ο/Η «${member.name}» θα αλλάξει από ${ROLE_LABELS[role] || role} σε ${ROLE_LABELS[target] || target}.` +
+    (target === 'ADMIN' ? ' Οι διαχειριστές έχουν πλήρη πρόσβαση στη Διαχείριση.' : role === 'ADMIN' ? ' Θα χάσει την πρόσβαση στη Διαχείριση.' : '');
 
   function confirmDelete() {
     Alert.alert('Διαγραφή μέλους', `Να διαγραφεί ο/η "${member.name}";`, [
@@ -490,17 +524,31 @@ function MemberDetailScreen({ member, onBack }: { member: Member; onBack: () => 
       <Text style={[typography.label, { marginTop: spacing.xl }]}>Ρόλος</Text>
       <View style={styles.typeRow}>
         {(['WORKER', 'MANAGER', 'ADMIN'] as const).map((r) => (
-          <TouchableOpacity key={r} style={[styles.typeButton, role === r && styles.typeButtonActive, isSelf && styles.typeButtonDisabled]} onPress={() => !isSelf && changeRole(r)} disabled={isSelf}>
+          <TouchableOpacity key={r} style={[styles.typeButton, role === r && styles.typeButtonActive, isSelf && styles.typeButtonDisabled]} onPress={() => askChangeRole(r)} disabled={isSelf}>
             <Text style={[styles.typeButtonText, role === r && styles.typeButtonTextActive]}>{ROLE_LABELS[r]}</Text>
           </TouchableOpacity>
         ))}
       </View>
-      {isSelf && <Text style={styles.hint}>Δεν μπορείς να αλλάξεις τον δικό σου ρόλο.</Text>}
+      {isSelf
+        ? <Text style={styles.hint}>Δεν μπορείς να αλλάξεις τον δικό σου ρόλο.</Text>
+        : <Text style={styles.hint}>Η αλλαγή ρόλου χρειάζεται επιβεβαίωση μετά από 5 δευτερόλεπτα. Εφαρμόζεται αυτόματα στη συσκευή του μέλους μέσα σε λίγα δευτερόλεπτα.</Text>}
 
       <TouchableOpacity style={[styles.deleteButton, isSelf && styles.buttonDisabled]} onPress={confirmDelete} disabled={isSelf}>
         <Text style={styles.deleteButtonText}>Διαγραφή Χρήστη</Text>
       </TouchableOpacity>
       {isSelf && <Text style={styles.hint}>Δεν μπορείς να διαγράψεις τον εαυτό σου.</Text>}
+
+      <CountdownConfirmModal
+        visible={pendingRole !== null}
+        title="Αλλαγή ρόλου"
+        message={roleMessage}
+        confirmLabel="Αλλαγή ρόλου"
+        seconds={5}
+        busy={savingRole}
+        icon={ion('shield-checkmark-outline')}
+        onConfirm={confirmChangeRole}
+        onCancel={() => { if (!savingRole) setPendingRole(null); }}
+      />
     </Screen>
   );
 }
@@ -525,8 +573,9 @@ function makeStyles(colors: any, spacing: any) {
     chipText: { fontSize: 13, fontWeight: '600', color: colors.ink2 },
     chipTextActive: { color: colors.paper },
     hint: { fontSize: 12, color: colors.muted, marginTop: spacing.sm },
-    menuRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.card, borderRadius: 10, borderWidth: 1, borderColor: colors.line, padding: spacing.lg, marginBottom: spacing.sm },
-    menuText: { fontSize: 16, fontWeight: '600', color: colors.ink },
+    menuRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: 10, borderWidth: 1, borderColor: colors.line, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
+    menuIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md, flexShrink: 0 },
+    menuText: { fontSize: 16, fontWeight: '600', color: colors.ink, flex: 1, minWidth: 0 },
     chevron: { fontSize: 22, color: colors.muted, flexShrink: 0 },
     listRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.card, borderRadius: 10, borderWidth: 1, borderColor: colors.line, padding: spacing.lg, marginBottom: spacing.sm },
     listRowText: { fontSize: 15, fontWeight: '600', color: colors.ink },

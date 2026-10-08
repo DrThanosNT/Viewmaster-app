@@ -5,11 +5,16 @@ import { api } from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 import Screen from '../components/Screen';
 import FitInput from '../components/FitInput';
+import LocationIcon from '../components/LocationIcon';
+import { parseDateTime, dateInputIn, formatDue } from '../utils/dateTime';
 
-type EventLite = { id: string; name: string };
+type EventLite = { id: string; name: string; startDate?: string; endDate?: string };
 type LocationT = { id: string; name: string; type: string; isSystem?: boolean; eventLocations?: { event: EventLite }[] };
 type StockEntry = { id: string; quantity: number; damagedQuantity?: number; temporaryQuantity?: number; location: LocationT; event?: EventLite | null };
 type Item = { id: string; name: string; stock?: StockEntry[] };
+
+// One choice in the "Προς" list: a plain location, or a location as part of an event.
+type Destination = { key: string; location: LocationT; event: EventLite | null };
 
 type StockRow = {
   key: string; itemId: string; itemName: string;
@@ -22,7 +27,7 @@ type CartLine = {
   id: string; itemId: string; itemName: string;
   fromLocationId?: string; fromLocationName?: string; fromEventId?: string | null; fromEventName?: string | null;
   toLocationId?: string; toLocationName?: string; toEventId?: string | null; toEventName?: string | null;
-  quantity: number; maxQuantity?: number; temporary?: boolean; fromDamaged?: boolean;
+  quantity: number; maxQuantity?: number; temporary?: boolean; expectedReturnAt?: string | null; fromDamaged?: boolean;
 };
 
 type Mode = 'transport' | 'import' | 'export' | 'return' | 'damage' | 'repair';
@@ -49,12 +54,13 @@ export default function MoveStockScreen() {
   const [pendingItem, setPendingItem] = useState<Item | null>(null);
   const [pendingRow, setPendingRow] = useState<StockRow | null>(null);
   const [pendingTemporary, setPendingTemporary] = useState(false);
+  const [pendingReturnDate, setPendingReturnDate] = useState('');
+  const [pendingReturnTime, setPendingReturnTime] = useState('');
   const [creatingNewItem, setCreatingNewItem] = useState(false);
 
   const [toQuery, setToQuery] = useState('');
   const [toFocused, setToFocused] = useState(false);
-  const [pendingDestination, setPendingDestination] = useState<LocationT | null>(null);
-  const [pendingToEvent, setPendingToEvent] = useState<EventLite | null>(null);
+  const [pendingDestination, setPendingDestination] = useState<Destination | null>(null);
 
   const [pendingQuantity, setPendingQuantity] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -87,8 +93,8 @@ export default function MoveStockScreen() {
   }
 
   function resetPending() {
-    setItemQuery(''); setItemFocused(false); setPendingItem(null); setPendingRow(null); setPendingTemporary(false); setCreatingNewItem(false);
-    setToQuery(''); setToFocused(false); setPendingDestination(null); setPendingToEvent(null); setPendingQuantity('');
+    setItemQuery(''); setItemFocused(false); setPendingItem(null); setPendingRow(null); setPendingTemporary(false); setPendingReturnDate(''); setPendingReturnTime(''); setCreatingNewItem(false);
+    setToQuery(''); setToFocused(false); setPendingDestination(null); setPendingQuantity('');
   }
 
   function switchMode(m: Mode) { setMode(m); resetPending(); }
@@ -133,17 +139,41 @@ export default function MoveStockScreen() {
     }
   }
 
+  // Everything you can send stock TO: every plain location, then one entry for
+  // each (event, location) pair - an event can have several locations. Events
+  // that have already finished are left out.
+  const destinationOptions = useMemo<Destination[]>(() => {
+    const now = Date.now();
+    const plain: Destination[] = locations.map((l) => ({ key: l.id, location: l, event: null }));
+    const seen = new Set<string>();
+    const forEvents: Destination[] = [];
+    locations.forEach((l) => {
+      (l.eventLocations || []).forEach(({ event }) => {
+        if (!event) return;
+        if (event.endDate && new Date(event.endDate).getTime() < now) return;
+        const key = `${event.id}:${l.id}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        forEvents.push({ key, location: l, event });
+      });
+    });
+    forEvents.sort((a, b) =>
+      (a.event!.startDate || '').localeCompare(b.event!.startDate || '') ||
+      a.event!.name.localeCompare(b.event!.name) ||
+      a.location.name.localeCompare(b.location.name));
+    return [...plain, ...forEvents];
+  }, [locations]);
+
   const toResults = useMemo(() => {
     if (!toFocused || pendingDestination) return [];
-    const excludeId = mode === 'transport' ? pendingRow?.locationId : undefined;
-    const pool = locations.filter((l) => l.id !== excludeId);
-    const q = toQuery.toLowerCase();
-    return q.length === 0 ? pool : pool.filter((l) => l.name.toLowerCase().includes(q));
-  }, [toQuery, toFocused, pendingDestination, locations, mode, pendingRow]);
-
-  const destEvents: EventLite[] = pendingDestination?.eventLocations?.map((el) => el.event) || [];
-  const requiresEventChoice = destEvents.length > 1;
-  const resolvedToEvent = destEvents.length === 1 ? destEvents[0] : requiresEventChoice ? pendingToEvent : null;
+    const q = toQuery.trim().toLowerCase();
+    return destinationOptions.filter((d) => {
+      // Stock can't be sent to the very same place (and event) it is leaving.
+      if (mode === 'transport' && pendingRow && d.location.id === pendingRow.locationId && (d.event?.id ?? null) === pendingRow.eventId) return false;
+      if (!q) return true;
+      return d.location.name.toLowerCase().includes(q) || (d.event?.name || '').toLowerCase().includes(q);
+    });
+  }, [toQuery, toFocused, pendingDestination, destinationOptions, mode, pendingRow]);
 
   const maxForPending = mode === 'import' ? undefined : pendingRow ? remainingAvailable(pendingRow) : 0;
 
@@ -156,11 +186,10 @@ export default function MoveStockScreen() {
   }
 
   const needsDestination = mode === 'transport' || mode === 'import';
-  const needsEventStep = needsDestination && !!pendingDestination && requiresEventChoice;
 
   const readyToAdd =
-    mode === 'transport' ? !!pendingRow && !!pendingDestination && (!requiresEventChoice || !!pendingToEvent) :
-    mode === 'import' ? !!pendingItem && !!pendingDestination && (!requiresEventChoice || !!pendingToEvent) :
+    mode === 'transport' ? !!pendingRow && !!pendingDestination :
+    mode === 'import' ? !!pendingItem && !!pendingDestination :
     !!pendingRow;
 
   function addToCart() {
@@ -170,18 +199,28 @@ export default function MoveStockScreen() {
     let line: CartLine;
     if (mode === 'transport' && pendingRow && pendingDestination) {
       line = {
-        id: `${pendingRow.key}-${pendingDestination.id}-${Date.now()}`,
+        id: `${pendingRow.key}-${pendingDestination.key}-${Date.now()}`,
         itemId: pendingRow.itemId, itemName: pendingRow.itemName,
         fromLocationId: pendingRow.locationId, fromLocationName: pendingRow.locationName, fromEventId: pendingRow.eventId, fromEventName: pendingRow.eventName,
-        toLocationId: pendingDestination.id, toLocationName: pendingDestination.name, toEventId: resolvedToEvent?.id ?? null, toEventName: resolvedToEvent?.name ?? null,
+        toLocationId: pendingDestination.location.id, toLocationName: pendingDestination.location.name, toEventId: pendingDestination.event?.id ?? null, toEventName: pendingDestination.event?.name ?? null,
         quantity: qty, maxQuantity: pendingRow.available,
       };
     } else if (mode === 'import' && pendingItem && pendingDestination) {
+      // Optional "when should this be gone" date, only for borrowed stock.
+      // A date alone means "by the end of that day".
+      let expectedReturnAt: string | null = null;
+      if (pendingTemporary && (pendingReturnDate.trim() || pendingReturnTime.trim())) {
+        if (!pendingReturnDate.trim()) { Alert.alert('Λείπει η ημερομηνία', 'Βάλε ημερομηνία επιστροφής ή άφησε και τα δύο πεδία κενά.'); return; }
+        const due = parseDateTime(pendingReturnDate, pendingReturnTime.trim() ? pendingReturnTime : '23:59');
+        if (!due) { Alert.alert('Μη έγκυρη ημερομηνία', 'Χρησιμοποίησε τη μορφή ΕΕΕΕ-ΜΜ-ΗΗ και ΩΩ:ΛΛ (ώρα 00-23).'); return; }
+        if (due.getTime() < Date.now()) { Alert.alert('Η ημερομηνία έχει περάσει', 'Η επιστροφή πρέπει να είναι στο μέλλον.'); return; }
+        expectedReturnAt = due.toISOString();
+      }
       line = {
-        id: `${pendingItem.id}-${pendingDestination.id}-${Date.now()}`,
+        id: `${pendingItem.id}-${pendingDestination.key}-${Date.now()}`,
         itemId: pendingItem.id, itemName: pendingItem.name,
-        toLocationId: pendingDestination.id, toLocationName: pendingDestination.name, toEventId: resolvedToEvent?.id ?? null, toEventName: resolvedToEvent?.name ?? null,
-        quantity: qty, temporary: pendingTemporary,
+        toLocationId: pendingDestination.location.id, toLocationName: pendingDestination.location.name, toEventId: pendingDestination.event?.id ?? null, toEventName: pendingDestination.event?.name ?? null,
+        quantity: qty, temporary: pendingTemporary, expectedReturnAt,
       };
     } else if (pendingRow && ['export', 'return', 'damage', 'repair'].includes(mode)) {
       line = {
@@ -229,7 +268,7 @@ export default function MoveStockScreen() {
       if (mode === 'transport') {
         await api.moveStockBatch({ lines: cart.map((l) => ({ itemId: l.itemId, locationId: l.fromLocationId, fromEventId: l.fromEventId ?? null, toLocationId: l.toLocationId!, toEventId: l.toEventId ?? null, quantity: l.quantity })), note: note || undefined });
       } else if (mode === 'import') {
-        await api.moveStockBatch({ lines: cart.map((l) => ({ itemId: l.itemId, toLocationId: l.toLocationId!, toEventId: l.toEventId ?? null, quantity: l.quantity, temporary: l.temporary })), note: note || undefined });
+        await api.moveStockBatch({ lines: cart.map((l) => ({ itemId: l.itemId, toLocationId: l.toLocationId!, toEventId: l.toEventId ?? null, quantity: l.quantity, temporary: l.temporary, expectedReturnAt: l.expectedReturnAt ?? null })), note: note || undefined });
       } else if (mode === 'export') {
         await api.exportStockBatch({ lines: cart.map((l) => ({ itemId: l.itemId, locationId: l.fromLocationId!, eventId: l.fromEventId ?? null, quantity: l.quantity, fromDamaged: l.fromDamaged })), note: note || undefined });
       } else if (mode === 'return') {
@@ -317,36 +356,54 @@ export default function MoveStockScreen() {
             <>
               <Text style={styles.label}>2. Προς</Text>
               {pendingDestination ? (
-                <SelectedField styles={styles} label={pendingDestination.name} onChange={() => { setPendingDestination(null); setToQuery(''); setPendingToEvent(null); }} />
+                <SelectedField
+                  styles={styles}
+                  label={pendingDestination.event ? `${pendingDestination.event.name} — ${pendingDestination.location.name}` : pendingDestination.location.name}
+                  onChange={() => { setPendingDestination(null); setToQuery(''); }}
+                />
               ) : (
                 <>
-                  <FitInput placeholder="Αναζήτηση τοποθεσίας..." value={toQuery} onChangeText={setToQuery} onFocus={() => setToFocused(true)} onBlur={() => setTimeout(() => setToFocused(false), 150)} autoCapitalize="none" />
+                  <FitInput placeholder="Αναζήτηση τοποθεσίας ή εκδήλωσης..." value={toQuery} onChangeText={setToQuery} onFocus={() => setToFocused(true)} onBlur={() => setTimeout(() => setToFocused(false), 150)} autoCapitalize="none" />
                   {toFocused && (
-                    <Dropdown styles={styles} emptyText="Δεν βρέθηκε τοποθεσία." items={toResults} keyExtractor={(l) => l.id} onSelect={(l) => { setPendingDestination(l); setToQuery(''); setToFocused(false); }} render={(l) => <Text style={styles.optionText} numberOfLines={1}>{l.name}</Text>} />
+                    <Dropdown styles={styles} emptyText="Δεν βρέθηκε τοποθεσία ή εκδήλωση." items={toResults} keyExtractor={(d) => d.key} onSelect={(d) => { setPendingDestination(d); setToQuery(''); setToFocused(false); }} render={(d) => (
+                      <View style={styles.optionRow}>
+                        {/* "OTHER" draws the event icon, so event entries stand out from storages and vehicles. */}
+                        <LocationIcon type={d.event ? 'OTHER' : d.location.type} size={30} />
+                        <View style={{ flex: 1, minWidth: 0, marginLeft: spacing.sm }}>
+                          <Text style={styles.optionText} numberOfLines={1}>{d.event ? d.event.name : d.location.name}</Text>
+                          {d.event ? <Text style={styles.optionSmall} numberOfLines={1}>{d.location.name}</Text> : null}
+                        </View>
+                      </View>
+                    )} />
                   )}
                 </>
               )}
             </>
           )}
 
-          {needsEventStep && (
-            <>
-              <Text style={styles.label}>Για ποια εκδήλωση;</Text>
-              <View style={styles.chipRow}>
-                {destEvents.map((ev) => (
-                  <TouchableOpacity key={ev.id} style={[styles.chip, pendingToEvent?.id === ev.id && styles.chipActive]} onPress={() => setPendingToEvent(ev)}>
-                    <Text style={[styles.chipText, pendingToEvent?.id === ev.id && styles.chipTextActive]} numberOfLines={1}>{ev.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </>
-          )}
-
-          {mode === 'import' && pendingItem && pendingDestination && (!requiresEventChoice || pendingToEvent) && (
+          {mode === 'import' && pendingItem && pendingDestination && (
             <TouchableOpacity style={styles.checkboxRow} onPress={() => setPendingTemporary((v) => !v)}>
               <View style={[styles.checkbox, pendingTemporary && styles.checkboxChecked]}>{pendingTemporary && <Text style={styles.checkboxMark}>✓</Text>}</View>
               <Text style={styles.checkboxLabel}>Προσωρινό (δανεικό) — θα επιστραφεί αργότερα</Text>
             </TouchableOpacity>
+          )}
+
+          {mode === 'import' && pendingItem && pendingDestination && pendingTemporary && (
+            <View style={styles.returnBox}>
+              <Text style={styles.returnLabel}>Πότε πρέπει να φύγει / να επιστραφεί; (προαιρετικό)</Text>
+              <View style={styles.chipRow}>
+                {[{ label: 'Σήμερα', days: 0 }, { label: 'Αύριο', days: 1 }, { label: 'Σε 1 εβδομάδα', days: 7 }].map((q) => (
+                  <TouchableOpacity key={q.label} style={[styles.chip, pendingReturnDate === dateInputIn(q.days) && styles.chipActive]} onPress={() => setPendingReturnDate(dateInputIn(q.days))}>
+                    <Text style={[styles.chipText, pendingReturnDate === dateInputIn(q.days) && styles.chipTextActive]}>{q.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.returnInputs}>
+                <FitInput containerStyle={{ flex: 1.4 }} placeholder="ΕΕΕΕ-ΜΜ-ΗΗ" value={pendingReturnDate} onChangeText={setPendingReturnDate} onFocus={() => { if (!pendingReturnDate) setPendingReturnDate(dateInputIn(0)); }} autoCapitalize="none" />
+                <FitInput containerStyle={{ flex: 1 }} placeholder="ΩΩ:ΛΛ" value={pendingReturnTime} onChangeText={setPendingReturnTime} autoCapitalize="none" />
+              </View>
+              <Text style={styles.returnHint}>Αν δεν βάλεις ώρα, μετράει ως το τέλος της ημέρας.</Text>
+            </View>
           )}
 
           {readyToAdd && (
@@ -364,7 +421,7 @@ export default function MoveStockScreen() {
                 {cart.map((line) => (
                   <View key={line.id} style={styles.cartRow}>
                     <View style={styles.cartTextCol}>
-                      <Text style={styles.cartItemName} numberOfLines={1}>{line.itemName}{line.temporary ? <Text style={styles.temporaryTag}> (δανεικό)</Text> : null}{line.fromDamaged ? <Text style={styles.temporaryTag}> (κατεστρ.)</Text> : null}</Text>
+                      <Text style={styles.cartItemName} numberOfLines={1}>{line.itemName}{line.temporary ? <Text style={styles.temporaryTag}> (δανεικό{line.expectedReturnAt ? ` · έως ${formatDue(line.expectedReturnAt)}` : ''})</Text> : null}{line.fromDamaged ? <Text style={styles.temporaryTag}> (κατεστρ.)</Text> : null}</Text>
                       <Text style={styles.cartRoute} numberOfLines={1}>
                         {line.fromLocationName ? `${line.fromLocationName}${line.fromEventName ? ` (${line.fromEventName})` : ''}` : ''}
                         {line.fromLocationName && line.toLocationName ? <Text style={styles.arrow}> → </Text> : ''}
@@ -445,8 +502,10 @@ function makeStyles(colors: any, spacing: any, radius: any) {
     noteInput: { minHeight: 60, textAlignVertical: 'top' },
     dropdown: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.card, overflow: 'hidden' },
     option: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.paper },
+    optionRow: { flexDirection: 'row', alignItems: 'center' },
     optionText: { fontSize: 15, color: colors.ink },
     optionSub: { fontSize: 13, color: colors.muted, fontWeight: '400' },
+    optionSmall: { fontSize: 12, color: colors.muted, marginTop: 1 },
     createOption: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
     createOptionText: { fontSize: 14, color: colors.petrol, fontWeight: '700' },
     selectedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.lineStrong, borderRadius: radius.md, minHeight: 50, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg },
@@ -462,6 +521,10 @@ function makeStyles(colors: any, spacing: any, radius: any) {
     checkboxChecked: { backgroundColor: colors.ink, borderColor: colors.ink },
     checkboxMark: { color: colors.paper, fontSize: 14, fontWeight: '700' },
     checkboxLabel: { fontSize: 14, color: colors.ink, flex: 1, minWidth: 0 },
+    returnBox: { marginTop: spacing.md, backgroundColor: colors.amberSoft, borderRadius: radius.md, padding: spacing.md },
+    returnLabel: { fontSize: 13, fontWeight: '600', color: colors.ink2, marginBottom: spacing.sm },
+    returnInputs: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+    returnHint: { fontSize: 12, color: colors.muted, marginTop: spacing.sm },
     addButton: { marginTop: spacing.md + 2, paddingVertical: spacing.md, borderRadius: radius.md, backgroundColor: colors.petrolSoft, alignItems: 'center' },
     addButtonText: { color: colors.petrol, fontWeight: '700', fontSize: 14 },
     cartList: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, backgroundColor: colors.card, overflow: 'hidden' },

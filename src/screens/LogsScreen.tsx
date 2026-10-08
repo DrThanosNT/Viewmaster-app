@@ -5,12 +5,20 @@ import { api } from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 import Screen from '../components/Screen';
 import PressableCard from '../components/PressableCard';
+import AppIcon from '../components/AppIcon';
 import { LogEntry, ROLE_LABELS, badgeFor, capitalize, formatFullDate, formatTime } from '../utils/logHelpers';
 
 // List cards are deliberately capped - anything beyond this is one tap
 // away on the detail page.
 const PREVIEW_DESTINATIONS = 2;
 const PREVIEW_ITEMS = 3;
+
+// Badge sizes. The icon fills most of the circle so the arrow reads at a
+// glance; the item lines are indented by the badge width plus its gap.
+const BADGE = 32;
+const BADGE_ICON = 20;
+const BADGE_LG = 42;
+const BADGE_ICON_LG = 26;
 
 function bucketLabel(iso: string): string {
   const d = new Date(iso);
@@ -139,7 +147,7 @@ function LogCard({ log, photo, onPress }: { log: LogEntry; photo?: string | null
           <View key={`${dest.location.id}-${di}`} style={styles.destBox}>
             <View style={styles.destHeaderRow}>
               <View style={[styles.badge, { backgroundColor: badge.soft, borderColor: badge.color }]}>
-                <Text style={[styles.badgeSymbol, { color: badge.color }]}>{badge.symbol}</Text>
+                <AppIcon icon={badge.icon} size={BADGE_ICON} color={badge.color} />
               </View>
               <Text style={[styles.destTitle, { color: badge.color }]} numberOfLines={1}>
                 {badge.listLabel}{dest.event ? ` (${dest.event.name})` : ''}{dest.isTemporary && !dest.isDamage ? ' · προσωρινά' : ''}
@@ -190,7 +198,7 @@ function LogDetail({ log, photo, onBack }: { log: LogEntry; photo?: string | nul
             <View key={`${dest.location.id}-${di}`} style={[styles.detailDest, { borderLeftColor: badge.color }]}>
               <View style={styles.detailDestHeader}>
                 <View style={[styles.badgeLg, { backgroundColor: badge.soft, borderColor: badge.color }]}>
-                  <Text style={[styles.badgeSymbolLg, { color: badge.color }]}>{badge.symbol}</Text>
+                  <AppIcon icon={badge.icon} size={BADGE_ICON_LG} color={badge.color} />
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.kindLabel}>{badge.kindLabel}</Text>
@@ -243,14 +251,13 @@ function makeStyles(colors: any, spacing: any, radius: any) {
     moverName: { fontSize: 15, fontWeight: '700', color: colors.ink, flexShrink: 1 },
     cardChevron: { fontSize: 20, color: colors.muted, marginLeft: spacing.sm, flexShrink: 0 },
     destBox: { backgroundColor: colors.paper, borderRadius: radius.sm, padding: spacing.md, marginBottom: spacing.sm },
-    destHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-    badge: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm, flexShrink: 0 },
-    badgeSymbol: { fontSize: 12, fontWeight: '800' },
-    destTitle: { fontSize: 13, fontWeight: '700', flex: 1, minWidth: 0 },
-    itemLineRow: { flexDirection: 'row', marginTop: 3, paddingLeft: 30 },
+    destHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+    badge: { width: BADGE, height: BADGE, borderRadius: BADGE / 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm, flexShrink: 0 },
+    destTitle: { fontSize: 14, fontWeight: '700', flex: 1, minWidth: 0 },
+    itemLineRow: { flexDirection: 'row', marginTop: 3, paddingLeft: BADGE + spacing.sm },
     itemLineQty: { fontFamily: 'monospace', fontSize: 12, color: colors.ink2, fontWeight: '600', marginRight: 6, minWidth: 28, flexShrink: 0 },
     itemLineName: { fontSize: 13, color: colors.ink, flex: 1, minWidth: 0 },
-    moreText: { fontSize: 12, color: colors.muted, fontWeight: '600', marginTop: 4, paddingLeft: 30 },
+    moreText: { fontSize: 12, color: colors.muted, fontWeight: '600', marginTop: 4, paddingLeft: BADGE + spacing.sm },
     noteText: { fontSize: 12, color: colors.muted, fontStyle: 'italic', marginTop: spacing.xs },
 
     backRow: { marginBottom: spacing.md },
@@ -261,8 +268,7 @@ function makeStyles(colors: any, spacing: any, radius: any) {
     summaryText: { fontSize: 13, color: colors.ink2, fontWeight: '600', marginBottom: spacing.lg },
     detailDest: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, borderLeftWidth: 3, padding: spacing.lg, marginBottom: spacing.lg },
     detailDestHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
-    badgeLg: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md, flexShrink: 0 },
-    badgeSymbolLg: { fontSize: 15, fontWeight: '800' },
+    badgeLg: { width: BADGE_LG, height: BADGE_LG, borderRadius: BADGE_LG / 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md, flexShrink: 0 },
     kindLabel: { fontSize: 11, fontWeight: '600', color: colors.muted },
     destName: { fontSize: 16, fontWeight: '700', color: colors.ink },
     eventLine: { fontSize: 12, fontWeight: '600', color: colors.petrol, marginTop: 1 },
