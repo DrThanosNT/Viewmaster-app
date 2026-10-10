@@ -17,21 +17,6 @@ Stock lives in **locations** (storages, vehicles, venues). Every time something 
 
 Events sit on top of this: an event groups one or more venues, and its view shows only the gear that was sent *for that event* — while a storage always shows everything physically inside it.
 
-## Screenshots
-
-<table>
-  <tr>
-    <td align="center"><img src="docs/screenshots/overview.png" width="220" alt="Overview"><br><sub><b>Overview</b><br>pending borrowed items, recent activity</sub></td>
-    <td align="center"><img src="docs/screenshots/stock.png" width="220" alt="Stock"><br><sub><b>Stock</b><br>move, import, consume, return, damage, repair</sub></td>
-    <td align="center"><img src="docs/screenshots/location.png" width="220" alt="Location"><br><sub><b>Locations</b><br>everything inside a storage</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/screenshots/event.png" width="220" alt="Event"><br><sub><b>Events</b><br>venues and gear sent for the event</sub></td>
-    <td align="center"><img src="docs/screenshots/temporary.png" width="220" alt="Borrowed items"><br><sub><b>Borrowed items</b><br>return dates, overdue flagged</sub></td>
-    <td align="center"><img src="docs/screenshots/logs.png" width="220" alt="Logs"><br><sub><b>Logs</b><br>who moved what, where and when</sub></td>
-  </tr>
-</table>
-
 ## Features
 
 ### Locations
